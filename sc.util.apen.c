@@ -284,12 +284,27 @@ void sc_util_apen_float(t_sc_util_apen *x, double f)
 }
 
 void sc_util_apen_list(t_sc_util_apen *x, t_symbol* a, long argc, t_atom *argv) {
+    
+
     t_atom* arg_temp = argv;
-    for(int i = 0; i < argc; i++, arg_temp++) {
+    long data_list_size = argc;
+    long arg_offset = 0;
+    if(argc > x->series_max_length)
+    {
+        data_list_size = x->series_max_length;
+        arg_offset = argc - x->series_max_length;
+    }
+    
+    double data_list[data_list_size];
+    arg_temp += arg_offset;
+    
+    for(int i = 0; i < data_list_size && (i + arg_offset) < argc; i++, arg_temp++) {
         switch(atom_gettype(arg_temp)) {
             case A_LONG:
+                data_list[i] = (double)atom_getlong(arg_temp);
                 break;
             case A_FLOAT:
+                data_list[i] = atom_getfloat(arg_temp);
                 break;
             default:
                 object_warn((t_object*)x, "Received non-numeric input");
@@ -297,21 +312,19 @@ void sc_util_apen_list(t_sc_util_apen *x, t_symbol* a, long argc, t_atom *argv) 
         }
     }
     
+    critical_tryenter(0);
+    /*
     arg_temp = argv;
     int idx = 0;
-    double* data_list;
     long data_size = argc;
     if(argc > x->series_max_length) {
         arg_temp += argc - x->series_max_length;
         idx = argc - x->series_max_length;
         data_size = x->series_max_length;
     }
-    
-    data_list = (double*)sysmem_newptr(sizeof(double) * data_size);
-    
-    double* data_temp = data_list;
-    
-    for(; idx < argc; idx++, arg_temp++, data_temp++) {
+    //double data_list;// = (double*)sysmem_newptr(sizeof(double) * data_size);
+     
+     for(; idx < argc; idx++, arg_temp++, data_temp++) {
         switch(atom_gettype(arg_temp)) {
             case A_LONG:
                 *data_temp = (double)atom_getlong(arg_temp);
@@ -320,9 +333,13 @@ void sc_util_apen_list(t_sc_util_apen *x, t_symbol* a, long argc, t_atom *argv) 
                 *data_temp = atom_getfloat(arg_temp);
                 break;
         }
-    }
+     }
+    */
     
-    long tot_size = x->series_length + data_size;
+    //double* data_temp = data_list;
+
+    
+    long tot_size = x->series_length + data_list_size;
     
     long del_idx = 0;
     
@@ -336,8 +353,8 @@ void sc_util_apen_list(t_sc_util_apen *x, t_symbol* a, long argc, t_atom *argv) 
     
     double* temp = x->test_value + x->series_length;
     
-    sysmem_copyptr(data_list, temp, sizeof(double) * data_size);
-    
+    sysmem_copyptr(&data_list, temp, sizeof(double) * data_list_size);
+    /*
     //free data
     data_temp = data_list;
     for(int i = 0; i < data_size; i++) {
@@ -345,8 +362,10 @@ void sc_util_apen_list(t_sc_util_apen *x, t_symbol* a, long argc, t_atom *argv) 
         data_temp++;
         sysmem_freeptr(d2);
     }
+    */
+    x->series_length += data_list_size;
     
-    x->series_length += data_size;
+    critical_exit(0);
     
     if(x->calc_on_input == 1) {
         sc_util_apen_calculate(x);
