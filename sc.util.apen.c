@@ -142,16 +142,20 @@ void sc_util_apen_assist(t_sc_util_apen *x, void *b, long m, long a, char *s)
 
 void sc_util_apen_free(t_sc_util_apen *x)
 {
+    critical_enter(0);
+    sc_util_apen_clear(x);
     //start by freeing the test values
     if(x->test_value) {
         double* temp = x->test_value;
-        for(int i = 0; i < x->series_max_length && temp; i++) {
+        temp++;
+        for(int i = 1; i < x->series_max_length && temp; i++) {
             double* t2 = temp;
             temp++;
             sysmem_freeptr(t2);
         }
+        sysmem_freeptr(x->test_value);
     }
-
+    critical_exit(0);
 }
 
 
@@ -458,12 +462,26 @@ void sc_util_apen_set_series_length(t_sc_util_apen *x, void *attr, long argc, t_
             }
             sysmem_copyptr(x->test_value, temp, byte_length);
             
+            
+            //clear old data
+            
+            double old_max = x->series_max_length;
+            double* d_temp = x->test_value;
+            
+            x->test_value = temp;
+            
+            for(int i = 0; i < old_max; i++){
+                double* dt2 = d_temp;
+                d_temp++;
+                sysmem_freeptr(dt2);
+            }
+            
+            
             if(x->series_length > temp_sl) {
                 x->series_length = temp_sl;
             }
             
             x->series_max_length = temp_sl;
-            
             critical_exit(0);
         } else if(temp_sl != x->series_max_length){
             object_error((t_object *)x, "Series length too short, must >= %d", (2 * x->pattern_length) + 1);
@@ -693,6 +711,8 @@ void sc_util_apen_calculate(t_sc_util_apen *x) {
         if(x->hold_size_warning == 1){ //warn user of insufficient data
             object_warn((t_object*)x, "Not enough data to calculate approximate entropy.");
             object_warn((t_object*)x, "Need %d data points, have %d", x->pattern_length * 2, x->series_length);
+            object_warn((t_object*)x, "Outputting default value of 0.");
+            outlet_float(x->out2, 0.0);
         }
         //exit function, do not attempt to calculate
         return;
